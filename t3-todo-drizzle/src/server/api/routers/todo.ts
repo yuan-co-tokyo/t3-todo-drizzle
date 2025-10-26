@@ -2,14 +2,16 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { todos } from "~/server/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
+import { markTodoAsDeleted } from "~/server/api/services/todo";
 
 export const todoRouter = createTRPCRouter({
   list: publicProcedure.query(async ({ ctx }) => {
     const rows = await ctx.db
       .select()
       .from(todos)
+      .where(isNull(todos.deletedAt))
       .orderBy(desc(todos.createdAt));
     return rows;
   }),
@@ -35,7 +37,7 @@ export const todoRouter = createTRPCRouter({
       await ctx.db
         .update(todos)
         .set({ completed: input.completed, updatedAt: new Date() })
-        .where(eq(todos.id, input.id))
+        .where(and(eq(todos.id, input.id), isNull(todos.deletedAt)))
         .execute();
       return { ok: true };
     }),
@@ -46,7 +48,7 @@ export const todoRouter = createTRPCRouter({
       await ctx.db
         .update(todos)
         .set({ title: input.title, updatedAt: new Date() })
-        .where(eq(todos.id, input.id))
+        .where(and(eq(todos.id, input.id), isNull(todos.deletedAt)))
         .execute();
       return { ok: true };
     }),
@@ -54,7 +56,7 @@ export const todoRouter = createTRPCRouter({
   remove: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.db.delete(todos).where(eq(todos.id, input.id)).execute();
+      await markTodoAsDeleted(ctx.db, input.id);
       return { ok: true };
     }),
 });

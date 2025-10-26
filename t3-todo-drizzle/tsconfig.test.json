@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".tmp/tests"
+  },
+  "include": [
+    "tests/**/*.ts",
+    "src/server/api/services/**/*.ts",
+    "src/server/db/schema.ts"
+  ]
+}

@@ -9,5 +9,6 @@ export const todos = pgTable("Todo", {
     .defaultNow(),
   updatedAt: timestamp("updatedAt", { mode: "date" })
     .notNull()
-    .defaultNow()
+    .defaultNow(),
+  deletedAt: timestamp("deletedAt", { mode: "date" })
 });
