@@ -1,5 +1,5 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { todos } from "../../db/schema.js";
+import { todos } from "../../db/schema";
 
 // Drizzle の update チェーンで利用する最小限の型
 type UpdateExecuteBuilder = {
