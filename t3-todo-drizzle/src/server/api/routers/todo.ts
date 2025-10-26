@@ -6,15 +6,29 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { markTodoAsDeleted } from "~/server/api/services/todo";
 
+const todoStatusSchema = z.enum(["all", "active", "completed"]);
+
 export const todoRouter = createTRPCRouter({
-  list: publicProcedure.query(async ({ ctx }) => {
-    const rows = await ctx.db
-      .select()
-      .from(todos)
-      .where(isNull(todos.deletedAt))
-      .orderBy(desc(todos.createdAt));
-    return rows;
-  }),
+  list: publicProcedure
+    .input(z.object({ status: todoStatusSchema }).optional())
+    .query(async ({ ctx, input }) => {
+      const status = input?.status ?? "all";
+
+      const baseCondition = isNull(todos.deletedAt);
+      const whereCondition =
+        status === "active"
+          ? and(baseCondition, eq(todos.completed, false))
+          : status === "completed"
+            ? and(baseCondition, eq(todos.completed, true))
+            : baseCondition;
+
+      const rows = await ctx.db
+        .select()
+        .from(todos)
+        .where(whereCondition)
+        .orderBy(desc(todos.createdAt));
+      return rows;
+    }),
 
   create: publicProcedure
     .input(z.object({ title: z.string().min(1).max(200) }))

@@ -1,5 +1,6 @@
 "use client";
 
+import { useIsMutating } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "~/trpc/react";
 import { Alert } from "~/components/alert";
@@ -17,12 +18,28 @@ type HomePageContentProps = {
   apiClient?: TodoApiClient;
 };
 
+function useSafeMutationCount() {
+  try {
+    return useIsMutating();
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("No QueryClient set")) {
+      return 0;
+    }
+    throw error;
+  }
+}
+
 export function HomePageContent({ apiClient }: HomePageContentProps) {
   const client = apiClient ?? api;
   const utils = client.useUtils();
-  const { data: todos, isLoading } = client.todo.list.useQuery();
+  const [status, setStatus] = useState<"all" | "active" | "completed">("all");
+  const { data: todos, isLoading, isFetching } = client.todo.list.useQuery(
+    { status },
+    { keepPreviousData: true }
+  );
   const [title, setTitle] = useState("");
   const [notification, setNotification] = useState<Notification | null>(null);
+  const isMutating = useSafeMutationCount() > 0;
 
   const showError = (error: unknown) => {
     setNotification({ status: "error", message: toErrorMessage(error) });
@@ -52,6 +69,31 @@ export function HomePageContent({ apiClient }: HomePageContentProps) {
           />
         </div>
       ) : null}
+
+      <div className="mb-4 flex gap-2">
+        {(
+          [
+            { label: "All", value: "all" as const },
+            { label: "Active", value: "active" as const },
+            { label: "Completed", value: "completed" as const },
+          ] satisfies { label: string; value: "all" | "active" | "completed" }[]
+        ).map(({ label, value }) => {
+          const isActive = status === value;
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setStatus(value)}
+              className={`rounded border px-3 py-1 text-sm ${
+                isActive ? "bg-black text-white" : "bg-white"
+              } disabled:opacity-50`}
+              disabled={isActive || isMutating}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
 
       <form
         onSubmit={(e) => {
@@ -86,6 +128,10 @@ export function HomePageContent({ apiClient }: HomePageContentProps) {
           ))}
         </ul>
       )}
+
+      {isFetching && !isLoading ? (
+        <p className="mt-2 text-sm text-gray-500">Updating list...</p>
+      ) : null}
     </main>
   );
 }
