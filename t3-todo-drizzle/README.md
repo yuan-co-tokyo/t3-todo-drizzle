@@ -53,6 +53,7 @@ npm run dev
 - `npm run db:migrate` — マイグレーションを適用
 - `npm run db:studio` — Drizzle Studio を起動
 - `npm run typecheck` — TypeScript の型チェックを実行
+- `npm test` — 単体テストを実行
 
 ## ドキュメント
 
