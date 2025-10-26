@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { InferSelectModel } from "drizzle-orm";
 import { api } from "~/trpc/react";
 import { Alert } from "~/components/alert";
@@ -11,7 +11,9 @@ type Todo = InferSelectModel<typeof todos>;
 
 type Notification = {
   status: "success" | "error";
-  message: string;
+  message: ReactNode;
+  actionLabel?: string;
+  onAction?: () => void;
 };
 
 type TodoApiClient = typeof api;
@@ -55,12 +57,50 @@ export function TodoItem({ todo, apiClient }: TodoItemProps) {
     },
   });
 
-  const remove = client.todo.remove.useMutation({
+  const restore = client.todo.restore.useMutation({
     onSuccess: async () => {
-      await utils.todo.list.invalidate();
+      setNotification({ status: "success", message: "タスクを復元しました。" });
+      await Promise.all([
+        utils.todo.list.invalidate(),
+        utils.todo.listDeleted.invalidate(),
+      ]);
     },
     onError: async (error) => {
-      await utils.todo.list.invalidate();
+      await Promise.all([
+        utils.todo.list.invalidate(),
+        utils.todo.listDeleted.invalidate(),
+      ]);
+      showError(error);
+    },
+  });
+
+  const remove = client.todo.remove.useMutation({
+    onSuccess: async (result) => {
+      if (result?.todo) {
+        setNotification({
+          status: "success",
+          message: `「${result.todo.title}」を削除しました。`,
+          actionLabel: "元に戻す",
+          onAction: () => {
+            if (restore.isPending) return;
+            setNotification(null);
+            restore.mutate({ id: result.todo.id });
+          },
+        });
+      } else if (result?.ok === false) {
+        setNotification({ status: "error", message: "タスクが見つかりませんでした。" });
+      }
+
+      await Promise.all([
+        utils.todo.list.invalidate(),
+        utils.todo.listDeleted.invalidate(),
+      ]);
+    },
+    onError: async (error) => {
+      await Promise.all([
+        utils.todo.list.invalidate(),
+        utils.todo.listDeleted.invalidate(),
+      ]);
       showError(error);
     },
   });
@@ -151,6 +191,8 @@ export function TodoItem({ todo, apiClient }: TodoItemProps) {
             status={notification.status}
             message={notification.message}
             onClose={() => setNotification(null)}
+            actionLabel={notification.actionLabel}
+            onAction={notification.onAction}
           />
         </div>
       ) : null}

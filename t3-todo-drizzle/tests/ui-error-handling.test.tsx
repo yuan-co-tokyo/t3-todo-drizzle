@@ -36,10 +36,15 @@ type MockApiOptions = {
     data?: Todo[];
     isLoading?: boolean;
   };
+  listDeleted?: {
+    data?: Todo[];
+    isLoading?: boolean;
+  };
   create?: MutationBehavior<{ title: string }>;
   updateTitle?: MutationBehavior<{ id: string; title: string }>;
   toggle?: MutationBehavior<{ id: string; completed: boolean }>;
   remove?: MutationBehavior<{ id: string }>;
+  restore?: MutationBehavior<{ id: string }>;
 };
 
 type TodoApiClient = typeof import("~/trpc/react").api;
@@ -49,6 +54,7 @@ type MutationControls = {
   updateTitle?: ReturnType<typeof useMockMutation<{ id: string; title: string }>>;
   toggle?: ReturnType<typeof useMockMutation<{ id: string; completed: boolean }>>;
   remove?: ReturnType<typeof useMockMutation<{ id: string }>>;
+  restore?: ReturnType<typeof useMockMutation<{ id: string }>>;
 };
 
 function useMockMutation<TInput>(
@@ -90,6 +96,11 @@ function createMockApi(options: MockApiOptions = {}): {
           // テストでは実際のデータ取得を行わない
         },
       },
+      listDeleted: {
+        invalidate: async () => {
+          // テストでは実際のデータ取得を行わない
+        },
+      },
     },
   };
 
@@ -100,6 +111,17 @@ function createMockApi(options: MockApiOptions = {}): {
         useQuery: () => ({
           data: options.list?.data ?? [],
           isLoading: options.list?.isLoading ?? false,
+          isFetching: false,
+        }),
+      },
+      listDeleted: {
+        useQuery: (_input?: unknown, queryOptions?: { enabled?: boolean }) => ({
+          data: options.listDeleted?.data ?? [],
+          isLoading:
+            queryOptions?.enabled === false
+              ? false
+              : options.listDeleted?.isLoading ?? false,
+          isFetching: false,
         }),
       },
       create: {
@@ -133,6 +155,13 @@ function createMockApi(options: MockApiOptions = {}): {
         useMutation: (config?: MutationConfig<{ id: string }>) => {
           const mutation = useMockMutation(config, options.remove ?? { mode: "success" });
           controls.remove = mutation;
+          return mutation;
+        },
+      },
+      restore: {
+        useMutation: (config?: MutationConfig<{ id: string }>) => {
+          const mutation = useMockMutation(config, options.restore ?? { mode: "success" });
+          controls.restore = mutation;
           return mutation;
         },
       },
@@ -195,6 +224,7 @@ test("TodoItem はタイトル更新失敗時にエラーを表示する", async
   const formButtons = queryAllByTag(textInput!.parentNode ?? textInput!, "button");
   assert.ok(formButtons.length > 0, "フォーム内のボタンが取得できること");
   const saveButton = formButtons[0];
+  assert.ok(saveButton, "保存ボタンが取得できること");
 
   assert.ok(controls.updateTitle, "updateTitle ミューテーションが初期化されること");
   act(() => {
