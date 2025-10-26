@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { todos } from "../../db/schema";
 
 // Drizzle の update チェーンで利用する最小限の型
@@ -11,7 +11,7 @@ type UpdateWhereBuilder = UpdateExecuteBuilder & {
 };
 
 type UpdateSetBuilder = {
-  set(values: { deletedAt: Date; updatedAt: Date }): UpdateWhereBuilder;
+  set(values: { deletedAt: Date | null; updatedAt: Date }): UpdateWhereBuilder;
 };
 
 export type TodoDatabaseClient = {
@@ -27,5 +27,17 @@ export async function markTodoAsDeleted(db: TodoDatabaseClient, id: string) {
     .update(todos)
     .set({ deletedAt: now, updatedAt: now })
     .where(and(eq(todos.id, id), isNull(todos.deletedAt)))
+    .execute();
+}
+
+/**
+ * Todo を復元する
+ */
+export async function restoreTodo(db: TodoDatabaseClient, id: string) {
+  const now = new Date();
+  await db
+    .update(todos)
+    .set({ deletedAt: null, updatedAt: now })
+    .where(and(eq(todos.id, id), isNotNull(todos.deletedAt)))
     .execute();
 }

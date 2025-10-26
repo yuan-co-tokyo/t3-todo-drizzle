@@ -33,13 +33,19 @@ export function HomePageContent({ apiClient }: HomePageContentProps) {
   const client = apiClient ?? api;
   const utils = client.useUtils();
   const [status, setStatus] = useState<"all" | "active" | "completed">("all");
-  const { data: todos, isLoading, isFetching } = client.todo.list.useQuery(
-    { status },
-    { keepPreviousData: true }
-  );
+  const { data: todos, isLoading, isFetching } = client.todo.list.useQuery({ status });
   const [title, setTitle] = useState("");
   const [notification, setNotification] = useState<Notification | null>(null);
+  const [showDeleted, setShowDeleted] = useState(false);
   const isMutating = useSafeMutationCount() > 0;
+
+  const {
+    data: deletedTodos,
+    isLoading: isDeletedLoading,
+    isFetching: isDeletedFetching,
+  } = client.todo.listDeleted.useQuery(undefined, {
+    enabled: showDeleted,
+  });
 
   const showError = (error: unknown) => {
     setNotification({ status: "error", message: toErrorMessage(error) });
@@ -52,6 +58,23 @@ export function HomePageContent({ apiClient }: HomePageContentProps) {
       setNotification({ status: "success", message: "Task added successfully." });
     },
     onError: (error) => {
+      showError(error);
+    },
+  });
+
+  const restoreMutation = client.todo.restore.useMutation({
+    onSuccess: async () => {
+      setNotification({ status: "success", message: "タスクを復元しました。" });
+      await Promise.all([
+        utils.todo.list.invalidate(),
+        utils.todo.listDeleted.invalidate(),
+      ]);
+    },
+    onError: async (error) => {
+      await Promise.all([
+        utils.todo.list.invalidate(),
+        utils.todo.listDeleted.invalidate(),
+      ]);
       showError(error);
     },
   });
@@ -132,6 +155,63 @@ export function HomePageContent({ apiClient }: HomePageContentProps) {
       {isFetching && !isLoading ? (
         <p className="mt-2 text-sm text-gray-500">Updating list...</p>
       ) : null}
+
+      <section className="mt-8 border-t pt-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Deleted tasks</h2>
+          <button
+            type="button"
+            onClick={() => setShowDeleted((v) => !v)}
+            className="rounded border px-3 py-1 text-sm"
+          >
+            {showDeleted ? "Hide" : "Show"}
+          </button>
+        </div>
+
+        {showDeleted ? (
+          <div className="space-y-2">
+            {isDeletedLoading ? (
+              <p>Loading deleted tasks...</p>
+            ) : deletedTodos && deletedTodos.length > 0 ? (
+              <ul className="space-y-2">
+                {deletedTodos.map((item) => (
+                  <li
+                    key={item.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded border p-3"
+                  >
+                    <div>
+                      <p className="font-medium">{item.title}</p>
+                      {item.deletedAt ? (
+                        <p className="text-xs text-gray-500">
+                          Deleted at: {item.deletedAt.toLocaleString()}
+                        </p>
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => restoreMutation.mutate({ id: item.id })}
+                      className="rounded bg-black px-3 py-1 text-white disabled:opacity-50"
+                      disabled={restoreMutation.isPending}
+                    >
+                      {restoreMutation.isPending ? "Restoring..." : "Restore"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-500">No deleted tasks.</p>
+            )}
+
+            {isDeletedFetching && !isDeletedLoading ? (
+              <p className="text-xs text-gray-500">Updating deleted list...</p>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">
+            View and restore tasks removed from the main list.
+          </p>
+        )}
+      </section>
     </main>
   );
 }
