@@ -1,6 +1,68 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core/dialect";
 import { markTodoAsDeleted } from "../src/server/api/services/todo.js";
+
+type TodoRow = {
+  id: string;
+  title: string;
+  completed: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt: Date | null;
+};
+
+const createMockTodo = (overrides: Partial<TodoRow>): TodoRow => ({
+  id: "todo-id",
+  title: "sample",
+  completed: false,
+  createdAt: new Date("2024-01-01T00:00:00.000Z"),
+  updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+  deletedAt: null,
+  ...overrides,
+});
+
+const createMockDb = (rows: TodoRow[]) => {
+  const whereCalls: SQL[] = [];
+  return {
+    db: {
+      select() {
+        return {
+          from() {
+            return {
+              where(condition: SQL) {
+                whereCalls.push(condition);
+                return {
+                  orderBy() {
+                    return Promise.resolve(rows);
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    },
+    whereCalls,
+  } as const;
+};
+
+let cachedTodoRouter: Awaited<ReturnType<typeof importTodoRouter>> | null = null;
+
+async function importTodoRouter() {
+  process.env.DATABASE_URL ??= "postgres://user:pass@localhost:5432/test";
+  process.env.NODE_ENV ??= "test";
+  const module = await import("../src/server/api/routers/todo.js");
+  return module.todoRouter;
+}
+
+async function getTodoRouter() {
+  if (!cachedTodoRouter) {
+    cachedTodoRouter = await importTodoRouter();
+  }
+  return cachedTodoRouter;
+}
 
 // markTodoAsDeleted の動作確認
 // 論理削除で deletedAt と updatedAt を更新することを確認する
@@ -35,4 +97,51 @@ test("markTodoAsDeleted は deletedAt と updatedAt を設定する", async () =
   assert.ok(builder.lastSet, "set が呼ばれていること");
   assert.ok(builder.lastSet?.deletedAt instanceof Date);
   assert.ok(builder.lastSet?.updatedAt instanceof Date);
+});
+
+test("todoRouter.list は削除済みを除外して全件を返す", async () => {
+  const rows = [createMockTodo({ id: "todo-1" })];
+  const { db, whereCalls } = createMockDb(rows);
+  const todoRouter = await getTodoRouter();
+  const caller = todoRouter.createCaller({ db } as { db: typeof db });
+
+  const result = await caller.list();
+
+  assert.deepEqual(result, rows);
+  assert.strictEqual(whereCalls.length, 1);
+
+  const dialect = new PgDialect();
+  const query = dialect.sqlToQuery(whereCalls[0]);
+  assert.strictEqual(query.sql, '"Todo"."deletedAt" is null');
+  assert.deepEqual(query.params, []);
+});
+
+test("todoRouter.list は active 指定で未完了のみを返す", async () => {
+  const rows = [createMockTodo({ id: "todo-2", completed: false })];
+  const { db, whereCalls } = createMockDb(rows);
+  const todoRouter = await getTodoRouter();
+  const caller = todoRouter.createCaller({ db } as { db: typeof db });
+
+  await caller.list({ status: "active" });
+
+  assert.strictEqual(whereCalls.length, 1);
+  const dialect = new PgDialect();
+  const query = dialect.sqlToQuery(whereCalls[0]);
+  assert.strictEqual(query.sql, '("Todo"."deletedAt" is null and "Todo"."completed" = $1)');
+  assert.deepEqual(query.params, [false]);
+});
+
+test("todoRouter.list は completed 指定で完了済みのみを返す", async () => {
+  const rows = [createMockTodo({ id: "todo-3", completed: true })];
+  const { db, whereCalls } = createMockDb(rows);
+  const todoRouter = await getTodoRouter();
+  const caller = todoRouter.createCaller({ db } as { db: typeof db });
+
+  await caller.list({ status: "completed" });
+
+  assert.strictEqual(whereCalls.length, 1);
+  const dialect = new PgDialect();
+  const query = dialect.sqlToQuery(whereCalls[0]);
+  assert.strictEqual(query.sql, '("Todo"."deletedAt" is null and "Todo"."completed" = $1)');
+  assert.deepEqual(query.params, [true]);
 });
