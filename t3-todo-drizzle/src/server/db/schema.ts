@@ -1,16 +1,13 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
-import { sql } from "drizzle-orm";
+import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
-export const todos = sqliteTable("Todo", {
+export const todos = pgTable("Todo", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
-  completed: integer("completed", { mode: "boolean" })
+  completed: boolean("completed").notNull().default(false),
+  createdAt: timestamp("createdAt", { mode: "date" })
     .notNull()
-    .default(false),
-  createdAt: integer("createdAt", { mode: "timestamp_ms" })
+    .defaultNow(),
+  updatedAt: timestamp("updatedAt", { mode: "date" })
     .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-  updatedAt: integer("updatedAt", { mode: "timestamp_ms" })
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
+    .defaultNow()
 });

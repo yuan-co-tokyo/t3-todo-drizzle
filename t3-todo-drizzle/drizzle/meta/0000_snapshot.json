@@ -1,6 +1,6 @@
 {
   "version": "6",
-  "dialect": "sqlite",
+  "dialect": "postgresql",
   "id": "d782cc02-bcde-4667-a792-efd6b9d1fb57",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
@@ -23,7 +23,7 @@
         },
         "completed": {
           "name": "completed",
-          "type": "integer",
+          "type": "boolean",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
@@ -31,19 +31,19 @@
         },
         "createdAt": {
           "name": "createdAt",
-          "type": "integer",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "(unixepoch() * 1000)"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
-          "type": "integer",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "(unixepoch() * 1000)"
+          "default": "now()"
         }
       },
       "indexes": {},
