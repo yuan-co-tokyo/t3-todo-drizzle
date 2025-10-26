@@ -15,7 +15,7 @@
 		"dev": "next dev --turbo",
                 "preview": "next build && next start",
                 "start": "next start",
-                "test": "rm -rf .tmp/tests && tsc -p tsconfig.test.json && node --test .tmp/tests/tests/todo-router.test.js",
+                "test": "rm -rf .tmp/tests && node tests/build-tests.mjs && node --test .tmp/tests/tests/*.js",
                 "typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
@@ -36,10 +36,10 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
-		"@tailwindcss/postcss": "^4.0.15",
-		"@types/node": "^20.14.10",
-		"@types/react": "^19.0.0",
-		"@types/react-dom": "^19.0.0",
+                "@tailwindcss/postcss": "^4.0.15",
+                "@types/node": "^20.14.10",
+                "@types/react": "^19.0.0",
+                "@types/react-dom": "^19.0.0",
                 "drizzle-kit": "^0.30.6",
                 "postcss": "^8.5.3",
                 "tailwindcss": "^4.0.15",

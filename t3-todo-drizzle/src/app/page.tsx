@@ -1,19 +1,41 @@
-// src/app/page.tsx
 "use client";
 
-import { api } from "~/trpc/react";
 import { useState } from "react";
+import { api } from "~/trpc/react";
+import { Alert } from "~/components/alert";
 import { TodoItem } from "~/components/todo-item";
+import { toErrorMessage } from "~/lib/error-message";
 
-export default function HomePage() {
-  const utils = api.useUtils();
-  const { data: todos, isLoading } = api.todo.list.useQuery();
+type Notification = {
+  status: "success" | "error";
+  message: string;
+};
+
+type TodoApiClient = typeof api;
+
+type HomePageContentProps = {
+  apiClient?: TodoApiClient;
+};
+
+export function HomePageContent({ apiClient }: HomePageContentProps) {
+  const client = apiClient ?? api;
+  const utils = client.useUtils();
+  const { data: todos, isLoading } = client.todo.list.useQuery();
   const [title, setTitle] = useState("");
+  const [notification, setNotification] = useState<Notification | null>(null);
 
-  const createMutation = api.todo.create.useMutation({
+  const showError = (error: unknown) => {
+    setNotification({ status: "error", message: toErrorMessage(error) });
+  };
+
+  const createMutation = client.todo.create.useMutation({
     onSuccess: () => {
       setTitle("");
-      utils.todo.list.invalidate();
+      void utils.todo.list.invalidate();
+      setNotification({ status: "success", message: "Task added successfully." });
+    },
+    onError: (error) => {
+      showError(error);
     },
   });
 
@@ -21,10 +43,21 @@ export default function HomePage() {
     <main className="mx-auto max-w-xl p-6">
       <h1 className="mb-4 text-2xl font-bold">T3 Todo (Drizzle)</h1>
 
+      {notification ? (
+        <div className="mb-4">
+          <Alert
+            status={notification.status}
+            message={notification.message}
+            onClose={() => setNotification(null)}
+          />
+        </div>
+      ) : null}
+
       <form
         onSubmit={(e) => {
           e.preventDefault();
           if (!title.trim()) return;
+          setNotification(null);
           createMutation.mutate({ title });
         }}
         className="mb-6 flex gap-2"
@@ -48,9 +81,15 @@ export default function HomePage() {
         <p>Loading...</p>
       ) : (
         <ul className="space-y-2">
-          {todos?.map((t) => <TodoItem key={t.id} todo={t} />)}
+          {todos?.map((t) => (
+            <TodoItem key={t.id} todo={t} apiClient={client} />
+          ))}
         </ul>
       )}
     </main>
   );
+}
+
+export default function HomePage() {
+  return <HomePageContent />;
 }

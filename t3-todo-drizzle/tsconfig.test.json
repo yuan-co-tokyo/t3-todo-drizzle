@@ -2,11 +2,16 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
-    "outDir": ".tmp/tests"
+    "outDir": ".tmp/tests",
+    "jsx": "react-jsx"
   },
   "include": [
     "tests/**/*.ts",
+    "tests/**/*.tsx",
+    "tests/**/*.d.ts",
     "src/server/api/services/**/*.ts",
-    "src/server/db/schema.ts"
+    "src/server/db/schema.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx"
   ]
 }

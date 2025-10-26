@@ -1,47 +1,93 @@
-// src/components/todo-item.tsx
 "use client";
 
-import { api } from "~/trpc/react";
 import { useState } from "react";
 import type { InferSelectModel } from "drizzle-orm";
+import { api } from "~/trpc/react";
+import { Alert } from "~/components/alert";
+import { toErrorMessage } from "~/lib/error-message";
 import { todos } from "~/server/db/schema";
 
 type Todo = InferSelectModel<typeof todos>;
 
-export function TodoItem({ todo }: { todo: Todo }) {
-  const utils = api.useUtils();
+type Notification = {
+  status: "success" | "error";
+  message: string;
+};
+
+type TodoApiClient = typeof api;
+
+type TodoItemProps = {
+  todo: Todo;
+  apiClient?: TodoApiClient;
+};
+
+export function TodoItem({ todo, apiClient }: TodoItemProps) {
+  const client = apiClient ?? api;
+  const utils = client.useUtils();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(todo.title);
+  const [notification, setNotification] = useState<Notification | null>(null);
 
-  const toggle = api.todo.toggle.useMutation({
-    onSuccess: () => utils.todo.list.invalidate(),
-  });
-  const updateTitle = api.todo.updateTitle.useMutation({
-    onSuccess: () => {
-      utils.todo.list.invalidate();
-      setEditing(false);
+  const showError = (error: unknown) => {
+    setNotification({ status: "error", message: toErrorMessage(error) });
+  };
+
+  const toggle = client.todo.toggle.useMutation({
+    onSuccess: async () => {
+      await utils.todo.list.invalidate();
+      setNotification(null);
+    },
+    onError: async (error) => {
+      await utils.todo.list.invalidate();
+      showError(error);
     },
   });
-  const remove = api.todo.remove.useMutation({
-    onSuccess: () => utils.todo.list.invalidate(),
+
+  const updateTitle = client.todo.updateTitle.useMutation({
+    onSuccess: async () => {
+      await utils.todo.list.invalidate();
+      setEditing(false);
+      setNotification({ status: "success", message: "Task title updated." });
+    },
+    onError: async (error) => {
+      await utils.todo.list.invalidate();
+      showError(error);
+    },
+  });
+
+  const remove = client.todo.remove.useMutation({
+    onSuccess: async () => {
+      await utils.todo.list.invalidate();
+    },
+    onError: async (error) => {
+      await utils.todo.list.invalidate();
+      showError(error);
+    },
   });
 
   return (
-    <li className="flex items-center gap-3 rounded border p-3">
+    <li className="flex flex-wrap items-center gap-3 rounded border p-3">
       <input
         type="checkbox"
         checked={!!todo.completed}
-        onChange={(e) =>
-          toggle.mutate({ id: todo.id, completed: e.target.checked })
-        }
+        onChange={(e) => {
+          setNotification(null);
+          toggle.mutate({ id: todo.id, completed: e.target.checked });
+        }}
         className="h-5 w-5"
+        disabled={toggle.isPending || remove.isPending}
       />
+
+      {toggle.isPending ? (
+        <span className="text-xs text-gray-500">Updating...</span>
+      ) : null}
 
       {editing ? (
         <form
           onSubmit={(e) => {
             e.preventDefault();
             if (!draft.trim()) return;
+            setNotification(null);
             updateTitle.mutate({ id: todo.id, title: draft.trim() });
           }}
           className="flex flex-1 items-center gap-2"
@@ -57,7 +103,7 @@ export function TodoItem({ todo }: { todo: Todo }) {
             className="rounded bg-black px-3 py-1 text-white"
             disabled={updateTitle.isPending}
           >
-            Save
+            {updateTitle.isPending ? "Saving..." : "Save"}
           </button>
           <button
             type="button"
@@ -83,17 +129,31 @@ export function TodoItem({ todo }: { todo: Todo }) {
       <button
         onClick={() => setEditing((v) => !v)}
         className="rounded border px-3 py-1"
+        disabled={updateTitle.isPending || remove.isPending}
       >
         {editing ? "Edit…" : "Edit"}
       </button>
 
       <button
-        onClick={() => remove.mutate({ id: todo.id })}
+        onClick={() => {
+          setNotification(null);
+          remove.mutate({ id: todo.id });
+        }}
         className="rounded bg-red-600 px-3 py-1 text-white"
         disabled={remove.isPending}
       >
-        Delete
+        {remove.isPending ? "Deleting..." : "Delete"}
       </button>
+
+      {notification ? (
+        <div className="w-full">
+          <Alert
+            status={notification.status}
+            message={notification.message}
+            onClose={() => setNotification(null)}
+          />
+        </div>
+      ) : null}
     </li>
   );
 }
