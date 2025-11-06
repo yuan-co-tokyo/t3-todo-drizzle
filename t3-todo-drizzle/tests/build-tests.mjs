@@ -1,5 +1,5 @@
-import { mkdir, readdir } from "node:fs/promises";
-import { extname, join, resolve } from "node:path";
+import { access, mkdir, readdir } from "node:fs/promises";
+import { extname, isAbsolute, join, resolve } from "node:path";
 import { build } from "esbuild";
 
 const rootDir = resolve(process.cwd());
@@ -34,13 +34,46 @@ await build({
     "@trpc/server",
     "drizzle-orm",
     "pg",
+    "esbuild",
     "superjson",
     "zod",
   ],
   sourcemap: false,
   logLevel: "error",
   jsx: "automatic",
+  plugins: [preferTypeScriptResolutionPlugin()],
 });
+
+export function preferTypeScriptResolutionPlugin() {
+  return {
+    name: "prefer-typescript-resolution",
+    setup(build) {
+      build.onResolve({ filter: /\.js$/ }, async (args) => {
+        if (!args.path.startsWith(".") && !args.path.startsWith("/")) {
+          return;
+        }
+
+        const basePath = args.path.slice(0, -3);
+        for (const extension of [".ts", ".tsx"]) {
+          const candidate = `${basePath}${extension}`;
+          const absolutePath = isAbsolute(candidate)
+            ? candidate
+            : join(args.resolveDir, candidate);
+
+          try {
+            await access(absolutePath);
+            // JS パスしか記述できない環境でも TypeScript を優先的に解決する
+            return { path: absolutePath };
+          } catch {
+            // ファイルが存在しない場合は次の候補を確認する
+          }
+        }
+
+        return;
+      });
+    },
+  };
+}
 
 async function collectTestFiles(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
